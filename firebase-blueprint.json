@@ -1,0 +1,366 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and application preferences",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "selectedFinancialYear": {
+          "type": "string",
+          "description": "Currently active financial year (e.g. 2025-2026)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account creation ISO timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp"
+        }
+      },
+      "required": ["email", "selectedFinancialYear", "createdAt"]
+    },
+    "FinancialYear": {
+      "title": "FinancialYear",
+      "description": "Accounting financial year period",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "year": {
+          "type": "string",
+          "description": "Year label such as 2024-2025, 2025-2026"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Start date YYYY-MM-DD"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "End date YYYY-MM-DD"
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is the default year"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp"
+        }
+      },
+      "required": ["userId", "year", "createdAt"]
+    },
+    "StockTrade": {
+      "title": "StockTrade",
+      "description": "A buy or sell stock execution entry",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "financialYear": {
+          "type": "string",
+          "description": "Financial year for this trade"
+        },
+        "tradeType": {
+          "type": "string",
+          "enum": ["BUY", "SELL"],
+          "description": "Trade action"
+        },
+        "dateTime": {
+          "type": "string",
+          "description": "Date and time of execution"
+        },
+        "stockName": {
+          "type": "string",
+          "description": "Symbol or stock company name"
+        },
+        "exchange": {
+          "type": "string",
+          "description": "NSE or BSE"
+        },
+        "orderQty": {
+          "type": "number",
+          "description": "Requested order quantity"
+        },
+        "execQty": {
+          "type": "number",
+          "description": "Executed quantity"
+        },
+        "disclQty": {
+          "type": "number",
+          "description": "Disclosed quantity"
+        },
+        "orderPrice": {
+          "type": "number",
+          "description": "Price per share executed or placed"
+        },
+        "triggerPrice": {
+          "type": "number",
+          "description": "Trigger price if stop-loss"
+        },
+        "orderType": {
+          "type": "string",
+          "enum": ["MKT", "LMT", "SL", "SL-M"],
+          "description": "Order placement type"
+        },
+        "product": {
+          "type": "string",
+          "enum": ["Cash", "Intraday", "Delivery", "Margin"],
+          "description": "Product category"
+        },
+        "brokerage": {
+          "type": "number",
+          "description": "Taxes, brokerage and exchange fees"
+        },
+        "status": {
+          "type": "string",
+          "description": "Trade status"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Trade reason or memo"
+        },
+        "hslRefNo": {
+          "type": "string",
+          "description": "Unique reference number from broker Excel"
+        },
+        "sellCost": {
+          "type": "number",
+          "description": "Acquisition cost for sold shares"
+        },
+        "realizedPL": {
+          "type": "number",
+          "description": "Realized profit or loss"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "financialYear", "tradeType", "dateTime", "stockName", "execQty", "orderPrice", "createdAt"]
+    },
+    "IncomeEntry": {
+      "title": "IncomeEntry",
+      "description": "Profit or miscellaneous income record",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "financialYear": {
+          "type": "string",
+          "description": "Financial year"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of income"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category such as Dividend, Interest, Bonus"
+        },
+        "description": {
+          "type": "string",
+          "description": "Particulars"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in currency"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "financialYear", "date", "category", "amount", "createdAt"]
+    },
+    "ExpenseEntry": {
+      "title": "ExpenseEntry",
+      "description": "Operational and brokerage expense record",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "financialYear": {
+          "type": "string",
+          "description": "Financial year"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of expense"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category such as Software, Office, Demat Charges"
+        },
+        "description": {
+          "type": "string",
+          "description": "Particulars"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in currency"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "financialYear", "date", "category", "amount", "createdAt"]
+    },
+    "AccountItem": {
+      "title": "AccountItem",
+      "description": "Chart of accounts ledger account",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Account name"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["Asset", "Liability", "Capital", "Income", "Expense"],
+          "description": "Account group"
+        },
+        "openingBalance": {
+          "type": "number",
+          "description": "Opening balance"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "name", "type", "createdAt"]
+    },
+    "JournalRecord": {
+      "title": "JournalRecord",
+      "description": "Double-entry bookkeeping journal transaction",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "financialYear": {
+          "type": "string",
+          "description": "Financial year"
+        },
+        "date": {
+          "type": "string",
+          "description": "Transaction date"
+        },
+        "debitAccountId": {
+          "type": "string",
+          "description": "Debit account identifier"
+        },
+        "debitAccountName": {
+          "type": "string",
+          "description": "Debit account name"
+        },
+        "creditAccountId": {
+          "type": "string",
+          "description": "Credit account identifier"
+        },
+        "creditAccountName": {
+          "type": "string",
+          "description": "Credit account name"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount"
+        },
+        "narration": {
+          "type": "string",
+          "description": "Voucher narration"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "financialYear", "date", "debitAccountId", "creditAccountId", "amount", "createdAt"]
+    },
+    "SyncedDevice": {
+      "title": "SyncedDevice",
+      "description": "Registered device syncing real-time data",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Unique device hardware / client ID"
+        },
+        "deviceName": {
+          "type": "string",
+          "description": "Human readable device name (e.g. Flutter Android, iPhone 16 Pro, Chrome Desktop)"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Platform (Android, iOS, Web)"
+        },
+        "lastActive": {
+          "type": "string",
+          "description": "Last active ISO timestamp"
+        }
+      },
+      "required": ["userId", "deviceId", "deviceName", "platform", "lastActive"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and configuration"
+    },
+    "/users/{userId}/financialYears/{yearId}": {
+      "schema": "FinancialYear",
+      "description": "Financial accounting years for the user"
+    },
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "StockTrade",
+      "description": "Buy and sell stock trade transactions"
+    },
+    "/users/{userId}/incomes/{incomeId}": {
+      "schema": "IncomeEntry",
+      "description": "Other income and dividend records"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": "ExpenseEntry",
+      "description": "Operating and administrative expense records"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": "AccountItem",
+      "description": "Chart of accounts ledger definitions"
+    },
+    "/users/{userId}/journalEntries/{journalId}": {
+      "schema": "JournalRecord",
+      "description": "Double entry journal accounting transactions"
+    },
+    "/users/{userId}/syncedDevices/{deviceId}": {
+      "schema": "SyncedDevice",
+      "description": "Active connected devices for real-time sync presence"
+    }
+  }
+}

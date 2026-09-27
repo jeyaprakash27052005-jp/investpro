@@ -1,0 +1,6 @@
+{
+  "name": "InvestPro - Stock Investment & Real-Time Accounting",
+  "description": "Cross-device stock market investment and financial accounting platform with real-time Firebase sync, Excel statement imports, double-entry bookkeeping, and native mobile Flutter architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
