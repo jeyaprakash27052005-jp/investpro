@@ -172,14 +172,48 @@ export const ExcelImportView: React.FC = () => {
         return;
       }
 
+      const sourceColumns = Object.keys(rawData[0] || {}).filter((k) => k.trim() !== '');
+
       if (importType === 'trades') {
-        parseTradeRows(rawData, actionPreference);
+        const rows = parseTradeRows(rawData, actionPreference);
+        setTradeRows(rows);
+        if (rows.length === 0) {
+          setErrorMsg(
+            `Found ${rawData.length} row(s) but none had a recognizable Stock Name column. ` +
+            `Expected a column named "Stock Name", "Name", "Security", "Symbol", "Scrip" or "Company". ` +
+            `Your file's columns: ${sourceColumns.join(', ') || '(none detected)'}`
+          );
+        }
       } else if (importType === 'income' || importType === 'expense') {
-        parseIncomeExpenseRows(rawData);
+        const rows = parseIncomeExpenseRows(rawData);
+        setIncExpRows(rows);
+        if (rows.length === 0) {
+          setErrorMsg(
+            `Found ${rawData.length} row(s) but none had a valid, non-zero Amount. ` +
+            `Expected a column named "Amount", "Value" or "Amt" with numbers greater than 0. ` +
+            `Your file's columns: ${sourceColumns.join(', ') || '(none detected)'}`
+          );
+        }
       } else if (importType === 'journal') {
-        parseJournalRows(rawData);
+        const rows = parseJournalRows(rawData);
+        setJournalRows(rows);
+        if (rows.length === 0) {
+          setErrorMsg(
+            `Found ${rawData.length} row(s) but none had a Debit Account, Credit Account or Amount. ` +
+            `Expected columns named "Debit Account", "Credit Account" and "Amount". ` +
+            `Your file's columns: ${sourceColumns.join(', ') || '(none detected)'}`
+          );
+        }
       } else if (importType === 'accounts') {
-        parseAccountRows(rawData);
+        const rows = parseAccountRows(rawData);
+        setAccountRows(rows);
+        if (rows.length === 0) {
+          setErrorMsg(
+            `Found ${rawData.length} row(s) but none had a recognizable account Name column. ` +
+            `Expected a column named "Name", "Account Name" or "Ledger Name". ` +
+            `Your file's columns: ${sourceColumns.join(', ') || '(none detected)'}`
+          );
+        }
       }
     } catch (err) {
       console.error('Spreadsheet parse error:', err);
@@ -190,7 +224,7 @@ export const ExcelImportView: React.FC = () => {
   };
 
   // ---- Trades ----
-  const parseTradeRows = (rawData: Record<string, any>[], actionPreference: 'AUTO' | 'BUY' | 'SELL') => {
+  const parseTradeRows = (rawData: Record<string, any>[], actionPreference: 'AUTO' | 'BUY' | 'SELL'): TradeRowPreview[] => {
     const seenInThisFile = new Set<string>();
     const rows: TradeRowPreview[] = [];
 
@@ -267,11 +301,11 @@ export const ExcelImportView: React.FC = () => {
       });
     }
 
-    setTradeRows(rows);
+    return rows;
   };
 
   // ---- Income / Expense ----
-  const parseIncomeExpenseRows = (rawData: Record<string, any>[]) => {
+  const parseIncomeExpenseRows = (rawData: Record<string, any>[]): IncomeExpenseRowPreview[] => {
     const rows: IncomeExpenseRowPreview[] = [];
     for (const row of rawData) {
       const amount = Math.abs(Number(getCol(row, 'amount', 'value', 'amt')) || 0);
@@ -285,11 +319,11 @@ export const ExcelImportView: React.FC = () => {
 
       rows.push({ date, category, description, amount, isDuplicate: false });
     }
-    setIncExpRows(rows);
+    return rows;
   };
 
   // ---- Journal Vouchers ----
-  const parseJournalRows = (rawData: Record<string, any>[]) => {
+  const parseJournalRows = (rawData: Record<string, any>[]): JournalRowPreview[] => {
     const rows: JournalRowPreview[] = [];
     for (const row of rawData) {
       const amount = Math.abs(Number(getCol(row, 'amount', 'value')) || 0);
@@ -322,11 +356,11 @@ export const ExcelImportView: React.FC = () => {
         errorText,
       });
     }
-    setJournalRows(rows);
+    return rows;
   };
 
   // ---- Ledger Accounts ----
-  const parseAccountRows = (rawData: Record<string, any>[]) => {
+  const parseAccountRows = (rawData: Record<string, any>[]): AccountRowPreview[] => {
     const rows: AccountRowPreview[] = [];
     for (const row of rawData) {
       const name = String(getCol(row, 'name', 'account name', 'ledger name') || '').trim();
@@ -345,7 +379,7 @@ export const ExcelImportView: React.FC = () => {
 
       rows.push({ name, type, openingBalance, isDuplicate: willUpdate });
     }
-    setAccountRows(rows);
+    return rows;
   };
 
   const handleActionPrefChange = (pref: 'AUTO' | 'BUY' | 'SELL') => {
