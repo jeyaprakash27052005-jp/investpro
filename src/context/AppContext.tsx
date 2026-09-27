@@ -202,6 +202,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) {
       console.error('Google Sign-in failed:', error);
       setSyncStatus('error');
+      throw error;
     }
   };
 
