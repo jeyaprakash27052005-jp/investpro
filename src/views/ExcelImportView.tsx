@@ -537,8 +537,17 @@ export const ExcelImportView: React.FC = () => {
               type="file"
               accept={currentTab.accept}
               onChange={handleFileChange}
-              className="text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 file:cursor-pointer cursor-pointer"
+              className="hidden"
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 transition-colors shadow shadow-cyan-600/20 cursor-pointer shrink-0"
+            >
+              <Upload size={15} />
+              <span>{isProcessing ? 'Reading File...' : `Upload ${currentTab.label} File`}</span>
+            </button>
 
             {importType === 'trades' && (
               <select
