@@ -8,7 +8,9 @@ import {
   type User
 } from 'firebase/auth';
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   getDocFromServer,
   collection,
@@ -24,7 +26,16 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Persistent local cache (IndexedDB): queued writes and cached reads survive
+// page refreshes and brief network drops, and stay consistent across
+// multiple open tabs, so data entered while offline/flaky is never silently
+// lost -- it syncs to Firestore automatically once the connection returns.
+export const db = initializeFirestore(
+  app,
+  { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+  firebaseConfig.firestoreDatabaseId
+);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
