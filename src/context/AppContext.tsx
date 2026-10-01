@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   auth,
   db,
@@ -38,9 +38,7 @@ interface AppContextType {
   user: User | null;
   userProfile: UserProfile | null;
   isAuthLoading: boolean;
-  isGuest: boolean;
   signInWithGoogle: () => Promise<void>;
-  continueAsGuest: () => void;
   signOut: () => Promise<void>;
 
   // Financial Years
@@ -130,7 +128,6 @@ function detectPlatformName(): { name: string; platform: 'Android' | 'iOS' | 'We
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   const [financialYears, setFinancialYears] = useState<FinancialYear[]>([]);
@@ -152,47 +149,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthLoading(false);
-      if (currentUser) {
-        setIsGuest(false);
-      }
     });
     return () => unsubscribe();
   }, []);
-
-  // If guest mode or local fallback
-  const continueAsGuest = useCallback(() => {
-    setIsGuest(true);
-    // Seed initial local guest data if empty
-    if (financialYears.length === 0) {
-      setFinancialYears([
-        {
-          id: 'fy-2025-2026',
-          userId: 'guest',
-          year: '2025-2026',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'fy-2024-2025',
-          userId: 'guest',
-          year: '2024-2025',
-          isDefault: false,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-    }
-    if (accounts.length === 0) {
-      // No preset/default balances - the owner enters every account's actual
-      // opening balance (including Capital) manually via the Accounts screen.
-      setAccounts([
-        { id: 'acc-1', userId: 'guest', name: 'Trading Bank Account', type: 'Asset', openingBalance: 0, createdAt: new Date().toISOString() },
-        { id: 'acc-2', userId: 'guest', name: 'Demat Stock Investment', type: 'Asset', openingBalance: 0, createdAt: new Date().toISOString() },
-        { id: 'acc-3', userId: 'guest', name: 'Capital Account', type: 'Capital', openingBalance: 0, createdAt: new Date().toISOString() },
-        { id: 'acc-4', userId: 'guest', name: 'Brokerage & Exchange Charges', type: 'Expense', openingBalance: 0, createdAt: new Date().toISOString() },
-        { id: 'acc-5', userId: 'guest', name: 'Dividend & Short-Term Gains', type: 'Income', openingBalance: 0, createdAt: new Date().toISOString() },
-      ]);
-    }
-  }, [financialYears.length, accounts.length]);
 
   const signInWithGoogle = async () => {
     try {
@@ -210,7 +169,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fbSignOut(auth);
       setUser(null);
-      setIsGuest(false);
       setTrades([]);
       setIncomes([]);
       setExpenses([]);
@@ -455,91 +413,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addFinancialYear = async (yearStr: string) => {
     const cleanYear = yearStr.trim();
-    if (!cleanYear) return;
-    if (user) {
-      const yearDocRef = doc(db, 'users', user.uid, 'financialYears', cleanYear);
-      try {
-        await setDoc(yearDocRef, {
-          userId: user.uid,
-          year: cleanYear,
-          isDefault: false,
-          createdAt: new Date().toISOString(),
-        });
-        setSelectedYear(cleanYear);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/financialYears/${cleanYear}`);
-      }
-    } else {
-      const newYear: FinancialYear = {
-        id: `fy-${cleanYear}`,
-        userId: 'guest',
+    if (!cleanYear || !user) return;
+    const yearDocRef = doc(db, 'users', user.uid, 'financialYears', cleanYear);
+    try {
+      await setDoc(yearDocRef, {
+        userId: user.uid,
         year: cleanYear,
         isDefault: false,
         createdAt: new Date().toISOString(),
-      };
-      setFinancialYears((prev) => [...prev, newYear]);
-      setSelectedYearState(cleanYear);
+      });
+      setSelectedYear(cleanYear);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/financialYears/${cleanYear}`);
     }
   };
 
   // Trade Operations
   const addTrade = async (tradeData: Omit<StockTrade, 'id' | 'userId' | 'createdAt'>) => {
+    if (!user) return;
     const createdAt = new Date().toISOString();
-    if (user) {
-      const path = `users/${user.uid}/trades`;
-      try {
-        setSyncStatus('syncing');
-        const ref = doc(collection(db, 'users', user.uid, 'trades'));
-        await setDoc(ref, {
-          ...tradeData,
-          userId: user.uid,
-          createdAt,
-        });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-    } else {
-      const newTrade: StockTrade = {
+    const path = `users/${user.uid}/trades`;
+    try {
+      setSyncStatus('syncing');
+      const ref = doc(collection(db, 'users', user.uid, 'trades'));
+      await setDoc(ref, {
         ...tradeData,
-        id: 'trade_' + Date.now() + Math.random().toString(36).substring(2, 6),
-        userId: 'guest',
+        userId: user.uid,
         createdAt,
-      };
-      setTrades((prev) => [newTrade, ...prev]);
+      });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
   const updateTrade = async (tradeId: string, tradeData: Omit<StockTrade, 'id' | 'userId' | 'createdAt'>) => {
-    if (user) {
-      const path = `users/${user.uid}/trades/${tradeId}`;
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'users', user.uid, 'trades', tradeId), { ...tradeData, userId: user.uid }, { merge: true });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, path);
-      }
-    } else {
-      setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, ...tradeData } : t)));
+    if (!user) return;
+    const path = `users/${user.uid}/trades/${tradeId}`;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'users', user.uid, 'trades', tradeId), { ...tradeData, userId: user.uid }, { merge: true });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
   const deleteTrade = async (tradeId: string) => {
-    if (user) {
-      const path = `users/${user.uid}/trades/${tradeId}`;
-      try {
-        setSyncStatus('syncing');
-        await deleteDoc(doc(db, 'users', user.uid, 'trades', tradeId));
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.DELETE, path);
-      }
-    } else {
-      setTrades((prev) => prev.filter((t) => t.id !== tradeId));
+    if (!user) return;
+    const path = `users/${user.uid}/trades/${tradeId}`;
+    try {
+      setSyncStatus('syncing');
+      await deleteDoc(doc(db, 'users', user.uid, 'trades', tradeId));
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -572,34 +503,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { imported: 0, skipped };
     }
 
-    if (user) {
-      setSyncStatus('syncing');
-      try {
-        const batch = writeBatch(db);
-        const colRef = collection(db, 'users', user.uid, 'trades');
-        for (const item of tradesToInsert) {
-          const docRef = doc(colRef);
-          batch.set(docRef, {
-            ...item,
-            userId: user.uid,
-            createdAt: new Date().toISOString(),
-          });
-        }
-        await batch.commit();
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades`);
+    if (!user) return { imported: 0, skipped };
+
+    setSyncStatus('syncing');
+    try {
+      const batch = writeBatch(db);
+      const colRef = collection(db, 'users', user.uid, 'trades');
+      for (const item of tradesToInsert) {
+        const docRef = doc(colRef);
+        batch.set(docRef, {
+          ...item,
+          userId: user.uid,
+          createdAt: new Date().toISOString(),
+        });
       }
-    } else {
-      const createdAt = new Date().toISOString();
-      const localItems: StockTrade[] = tradesToInsert.map((item, idx) => ({
-        ...item,
-        id: `trade_imp_${Date.now()}_${idx}`,
-        userId: 'guest',
-        createdAt,
-      }));
-      setTrades((prev) => [...localItems, ...prev]);
+      await batch.commit();
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/trades`);
     }
 
     return { imported, skipped };
@@ -607,51 +529,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Incomes Operations
   const addIncome = async (incData: Omit<IncomeEntry, 'id' | 'userId' | 'createdAt'>) => {
+    if (!user) return;
     const createdAt = new Date().toISOString();
-    if (user) {
-      const path = `users/${user.uid}/incomes`;
-      try {
-        setSyncStatus('syncing');
-        const ref = doc(collection(db, 'users', user.uid, 'incomes'));
-        await setDoc(ref, { ...incData, userId: user.uid, createdAt });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-    } else {
-      setIncomes((prev) => [
-        { ...incData, id: 'inc_' + Date.now(), userId: 'guest', createdAt },
-        ...prev,
-      ]);
+    const path = `users/${user.uid}/incomes`;
+    try {
+      setSyncStatus('syncing');
+      const ref = doc(collection(db, 'users', user.uid, 'incomes'));
+      await setDoc(ref, { ...incData, userId: user.uid, createdAt });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
   const updateIncome = async (incomeId: string, incData: Omit<IncomeEntry, 'id' | 'userId' | 'createdAt'>) => {
-    if (user) {
-      const path = `users/${user.uid}/incomes/${incomeId}`;
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'users', user.uid, 'incomes', incomeId), { ...incData, userId: user.uid }, { merge: true });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, path);
-      }
-    } else {
-      setIncomes((prev) => prev.map((i) => (i.id === incomeId ? { ...i, ...incData } : i)));
+    if (!user) return;
+    const path = `users/${user.uid}/incomes/${incomeId}`;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'users', user.uid, 'incomes', incomeId), { ...incData, userId: user.uid }, { merge: true });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
   const deleteIncome = async (incomeId: string) => {
-    if (user) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'incomes', incomeId));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/incomes/${incomeId}`);
-      }
-    } else {
-      setIncomes((prev) => prev.filter((i) => i.id !== incomeId));
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'incomes', incomeId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/incomes/${incomeId}`);
     }
   };
 
@@ -660,81 +570,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newIncomes: Omit<IncomeEntry, 'id' | 'userId' | 'createdAt'>[]
   ): Promise<{ imported: number; skipped: number }> => {
     if (newIncomes.length === 0) return { imported: 0, skipped: 0 };
-    if (user) {
-      setSyncStatus('syncing');
-      try {
-        const batch = writeBatch(db);
-        const colRef = collection(db, 'users', user.uid, 'incomes');
-        for (const item of newIncomes) {
-          const docRef = doc(colRef);
-          batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
-        }
-        await batch.commit();
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/incomes`);
+    if (!user) return { imported: 0, skipped: 0 };
+
+    setSyncStatus('syncing');
+    try {
+      const batch = writeBatch(db);
+      const colRef = collection(db, 'users', user.uid, 'incomes');
+      for (const item of newIncomes) {
+        const docRef = doc(colRef);
+        batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
       }
-    } else {
-      const createdAt = new Date().toISOString();
-      const localItems: IncomeEntry[] = newIncomes.map((item, idx) => ({
-        ...item,
-        id: `inc_imp_${Date.now()}_${idx}`,
-        userId: 'guest',
-        createdAt,
-      }));
-      setIncomes((prev) => [...localItems, ...prev]);
+      await batch.commit();
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/incomes`);
     }
     return { imported: newIncomes.length, skipped: 0 };
   };
 
   // Expense Operations
   const addExpense = async (expData: Omit<ExpenseEntry, 'id' | 'userId' | 'createdAt'>) => {
+    if (!user) return;
     const createdAt = new Date().toISOString();
-    if (user) {
-      const path = `users/${user.uid}/expenses`;
-      try {
-        setSyncStatus('syncing');
-        const ref = doc(collection(db, 'users', user.uid, 'expenses'));
-        await setDoc(ref, { ...expData, userId: user.uid, createdAt });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-    } else {
-      setExpenses((prev) => [
-        { ...expData, id: 'exp_' + Date.now(), userId: 'guest', createdAt },
-        ...prev,
-      ]);
+    const path = `users/${user.uid}/expenses`;
+    try {
+      setSyncStatus('syncing');
+      const ref = doc(collection(db, 'users', user.uid, 'expenses'));
+      await setDoc(ref, { ...expData, userId: user.uid, createdAt });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
   const updateExpense = async (expenseId: string, expData: Omit<ExpenseEntry, 'id' | 'userId' | 'createdAt'>) => {
-    if (user) {
-      const path = `users/${user.uid}/expenses/${expenseId}`;
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'users', user.uid, 'expenses', expenseId), { ...expData, userId: user.uid }, { merge: true });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, path);
-      }
-    } else {
-      setExpenses((prev) => prev.map((e) => (e.id === expenseId ? { ...e, ...expData } : e)));
+    if (!user) return;
+    const path = `users/${user.uid}/expenses/${expenseId}`;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'users', user.uid, 'expenses', expenseId), { ...expData, userId: user.uid }, { merge: true });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
   const deleteExpense = async (expenseId: string) => {
-    if (user) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'expenses', expenseId));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/expenses/${expenseId}`);
-      }
-    } else {
-      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'expenses', expenseId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/expenses/${expenseId}`);
     }
   };
 
@@ -743,81 +632,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newExpenses: Omit<ExpenseEntry, 'id' | 'userId' | 'createdAt'>[]
   ): Promise<{ imported: number; skipped: number }> => {
     if (newExpenses.length === 0) return { imported: 0, skipped: 0 };
-    if (user) {
-      setSyncStatus('syncing');
-      try {
-        const batch = writeBatch(db);
-        const colRef = collection(db, 'users', user.uid, 'expenses');
-        for (const item of newExpenses) {
-          const docRef = doc(colRef);
-          batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
-        }
-        await batch.commit();
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/expenses`);
+    if (!user) return { imported: 0, skipped: 0 };
+
+    setSyncStatus('syncing');
+    try {
+      const batch = writeBatch(db);
+      const colRef = collection(db, 'users', user.uid, 'expenses');
+      for (const item of newExpenses) {
+        const docRef = doc(colRef);
+        batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
       }
-    } else {
-      const createdAt = new Date().toISOString();
-      const localItems: ExpenseEntry[] = newExpenses.map((item, idx) => ({
-        ...item,
-        id: `exp_imp_${Date.now()}_${idx}`,
-        userId: 'guest',
-        createdAt,
-      }));
-      setExpenses((prev) => [...localItems, ...prev]);
+      await batch.commit();
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/expenses`);
     }
     return { imported: newExpenses.length, skipped: 0 };
   };
 
   // Chart of Accounts Operations
   const addAccount = async (accData: Omit<AccountItem, 'id' | 'userId' | 'createdAt'>) => {
+    if (!user) return;
     const createdAt = new Date().toISOString();
-    if (user) {
-      const path = `users/${user.uid}/accounts`;
-      try {
-        setSyncStatus('syncing');
-        const ref = doc(collection(db, 'users', user.uid, 'accounts'));
-        await setDoc(ref, { ...accData, userId: user.uid, createdAt });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-    } else {
-      setAccounts((prev) => [
-        ...prev,
-        { ...accData, id: 'acc_' + Date.now(), userId: 'guest', createdAt },
-      ]);
+    const path = `users/${user.uid}/accounts`;
+    try {
+      setSyncStatus('syncing');
+      const ref = doc(collection(db, 'users', user.uid, 'accounts'));
+      await setDoc(ref, { ...accData, userId: user.uid, createdAt });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
   const updateAccount = async (accountId: string, accData: Omit<AccountItem, 'id' | 'userId' | 'createdAt'>) => {
-    if (user) {
-      const path = `users/${user.uid}/accounts/${accountId}`;
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'users', user.uid, 'accounts', accountId), { ...accData, userId: user.uid }, { merge: true });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, path);
-      }
-    } else {
-      setAccounts((prev) => prev.map((a) => (a.id === accountId ? { ...a, ...accData } : a)));
+    if (!user) return;
+    const path = `users/${user.uid}/accounts/${accountId}`;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'users', user.uid, 'accounts', accountId), { ...accData, userId: user.uid }, { merge: true });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
   const deleteAccount = async (accountId: string) => {
-    if (user) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'accounts', accountId));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/accounts/${accountId}`);
-      }
-    } else {
-      setAccounts((prev) => prev.filter((a) => a.id !== accountId));
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'accounts', accountId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/accounts/${accountId}`);
     }
   };
 
@@ -827,6 +695,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const importAccounts = async (
     newAccounts: Omit<AccountItem, 'id' | 'userId' | 'createdAt'>[]
   ): Promise<{ imported: number; skipped: number }> => {
+    if (!user) return { imported: 0, skipped: 0 };
+
     let imported = 0;
     let skipped = 0;
     const toCreate: Omit<AccountItem, 'id' | 'userId' | 'createdAt'>[] = [];
@@ -846,42 +716,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       imported++;
     }
 
-    if (user) {
-      if (toCreate.length > 0 || toUpdate.length > 0) {
-        setSyncStatus('syncing');
-        try {
-          const batch = writeBatch(db);
-          const colRef = collection(db, 'users', user.uid, 'accounts');
-          for (const item of toCreate) {
-            const docRef = doc(colRef);
-            batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
-          }
-          for (const item of toUpdate) {
-            const docRef = doc(db, 'users', user.uid, 'accounts', item.id);
-            batch.set(docRef, { ...item.data, userId: user.uid }, { merge: true });
-          }
-          await batch.commit();
-          setSyncStatus('synced');
-        } catch (error) {
-          setSyncStatus('error');
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/accounts`);
+    if (toCreate.length > 0 || toUpdate.length > 0) {
+      setSyncStatus('syncing');
+      try {
+        const batch = writeBatch(db);
+        const colRef = collection(db, 'users', user.uid, 'accounts');
+        for (const item of toCreate) {
+          const docRef = doc(colRef);
+          batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
         }
-      }
-    } else {
-      const createdAt = new Date().toISOString();
-      setAccounts((prev) => {
-        let next = [...prev];
         for (const item of toUpdate) {
-          next = next.map((a) => (a.id === item.id ? { ...a, ...item.data } : a));
+          const docRef = doc(db, 'users', user.uid, 'accounts', item.id);
+          batch.set(docRef, { ...item.data, userId: user.uid }, { merge: true });
         }
-        const created: AccountItem[] = toCreate.map((item, idx) => ({
-          ...item,
-          id: `acc_imp_${Date.now()}_${idx}`,
-          userId: 'guest',
-          createdAt,
-        }));
-        return [...next, ...created];
-      });
+        await batch.commit();
+        setSyncStatus('synced');
+      } catch (error) {
+        setSyncStatus('error');
+        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/accounts`);
+      }
     }
 
     return { imported, skipped };
@@ -889,51 +742,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Journal Operations
   const addJournal = async (journalData: Omit<JournalRecord, 'id' | 'userId' | 'createdAt'>) => {
+    if (!user) return;
     const createdAt = new Date().toISOString();
-    if (user) {
-      const path = `users/${user.uid}/journalEntries`;
-      try {
-        setSyncStatus('syncing');
-        const ref = doc(collection(db, 'users', user.uid, 'journalEntries'));
-        await setDoc(ref, { ...journalData, userId: user.uid, createdAt });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-    } else {
-      setJournals((prev) => [
-        { ...journalData, id: 'jrn_' + Date.now(), userId: 'guest', createdAt },
-        ...prev,
-      ]);
+    const path = `users/${user.uid}/journalEntries`;
+    try {
+      setSyncStatus('syncing');
+      const ref = doc(collection(db, 'users', user.uid, 'journalEntries'));
+      await setDoc(ref, { ...journalData, userId: user.uid, createdAt });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
   const updateJournal = async (journalId: string, journalData: Omit<JournalRecord, 'id' | 'userId' | 'createdAt'>) => {
-    if (user) {
-      const path = `users/${user.uid}/journalEntries/${journalId}`;
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'users', user.uid, 'journalEntries', journalId), { ...journalData, userId: user.uid }, { merge: true });
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, path);
-      }
-    } else {
-      setJournals((prev) => prev.map((j) => (j.id === journalId ? { ...j, ...journalData } : j)));
+    if (!user) return;
+    const path = `users/${user.uid}/journalEntries/${journalId}`;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'users', user.uid, 'journalEntries', journalId), { ...journalData, userId: user.uid }, { merge: true });
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
   const deleteJournal = async (journalId: string) => {
-    if (user) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'journalEntries', journalId));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/journalEntries/${journalId}`);
-      }
-    } else {
-      setJournals((prev) => prev.filter((j) => j.id !== journalId));
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'journalEntries', journalId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/journalEntries/${journalId}`);
     }
   };
 
@@ -943,30 +784,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newJournals: Omit<JournalRecord, 'id' | 'userId' | 'createdAt'>[]
   ): Promise<{ imported: number; skipped: number }> => {
     if (newJournals.length === 0) return { imported: 0, skipped: 0 };
-    if (user) {
-      setSyncStatus('syncing');
-      try {
-        const batch = writeBatch(db);
-        const colRef = collection(db, 'users', user.uid, 'journalEntries');
-        for (const item of newJournals) {
-          const docRef = doc(colRef);
-          batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
-        }
-        await batch.commit();
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/journalEntries`);
+    if (!user) return { imported: 0, skipped: 0 };
+
+    setSyncStatus('syncing');
+    try {
+      const batch = writeBatch(db);
+      const colRef = collection(db, 'users', user.uid, 'journalEntries');
+      for (const item of newJournals) {
+        const docRef = doc(colRef);
+        batch.set(docRef, { ...item, userId: user.uid, createdAt: new Date().toISOString() });
       }
-    } else {
-      const createdAt = new Date().toISOString();
-      const localItems: JournalRecord[] = newJournals.map((item, idx) => ({
-        ...item,
-        id: `jrn_imp_${Date.now()}_${idx}`,
-        userId: 'guest',
-        createdAt,
-      }));
-      setJournals((prev) => [...localItems, ...prev]);
+      await batch.commit();
+      setSyncStatus('synced');
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/journalEntries`);
     }
     return { imported: newJournals.length, skipped: 0 };
   };
@@ -1100,61 +932,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Restore data from JSON
   const restoreBackup = async (jsonData: string): Promise<boolean> => {
+    if (!user) return false;
     try {
       const data = JSON.parse(jsonData);
       if (!data || typeof data !== 'object') throw new Error('Invalid JSON format');
 
-      if (user) {
-        setSyncStatus('syncing');
-        const batch = writeBatch(db);
+      setSyncStatus('syncing');
+      const batch = writeBatch(db);
 
-        if (Array.isArray(data.trades)) {
-          for (const t of data.trades) {
-            const { id, ...rest } = t;
-            const ref = doc(collection(db, 'users', user.uid, 'trades'));
-            batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
-          }
+      if (Array.isArray(data.trades)) {
+        for (const t of data.trades) {
+          const { id, ...rest } = t;
+          const ref = doc(collection(db, 'users', user.uid, 'trades'));
+          batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
         }
-        if (Array.isArray(data.incomes)) {
-          for (const i of data.incomes) {
-            const { id, ...rest } = i;
-            const ref = doc(collection(db, 'users', user.uid, 'incomes'));
-            batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
-          }
-        }
-        if (Array.isArray(data.expenses)) {
-          for (const e of data.expenses) {
-            const { id, ...rest } = e;
-            const ref = doc(collection(db, 'users', user.uid, 'expenses'));
-            batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
-          }
-        }
-        if (Array.isArray(data.accounts)) {
-          for (const a of data.accounts) {
-            const { id, ...rest } = a;
-            const ref = doc(collection(db, 'users', user.uid, 'accounts'));
-            batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
-          }
-        }
-        if (Array.isArray(data.journals)) {
-          for (const j of data.journals) {
-            const { id, ...rest } = j;
-            const ref = doc(collection(db, 'users', user.uid, 'journalEntries'));
-            batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
-          }
-        }
-        await batch.commit();
-        setSyncStatus('synced');
-      } else {
-        if (Array.isArray(data.trades)) setTrades(data.trades);
-        if (Array.isArray(data.incomes)) setIncomes(data.incomes);
-        if (Array.isArray(data.expenses)) setExpenses(data.expenses);
-        if (Array.isArray(data.accounts)) setAccounts(data.accounts);
-        if (Array.isArray(data.journals)) setJournals(data.journals);
-        if (Array.isArray(data.financialYears)) setFinancialYears(data.financialYears);
       }
+      if (Array.isArray(data.incomes)) {
+        for (const i of data.incomes) {
+          const { id, ...rest } = i;
+          const ref = doc(collection(db, 'users', user.uid, 'incomes'));
+          batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
+        }
+      }
+      if (Array.isArray(data.expenses)) {
+        for (const e of data.expenses) {
+          const { id, ...rest } = e;
+          const ref = doc(collection(db, 'users', user.uid, 'expenses'));
+          batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
+        }
+      }
+      if (Array.isArray(data.accounts)) {
+        for (const a of data.accounts) {
+          const { id, ...rest } = a;
+          const ref = doc(collection(db, 'users', user.uid, 'accounts'));
+          batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
+        }
+      }
+      if (Array.isArray(data.journals)) {
+        for (const j of data.journals) {
+          const { id, ...rest } = j;
+          const ref = doc(collection(db, 'users', user.uid, 'journalEntries'));
+          batch.set(ref, { ...rest, userId: user.uid, createdAt: new Date().toISOString() });
+        }
+      }
+      await batch.commit();
+      setSyncStatus('synced');
       return true;
     } catch (e) {
+      setSyncStatus('error');
       console.error('Failed to restore backup:', e);
       return false;
     }
@@ -1166,9 +991,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         user,
         userProfile,
         isAuthLoading,
-        isGuest,
         signInWithGoogle,
-        continueAsGuest,
         signOut,
         financialYears,
         selectedYear,

@@ -162,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* User Session Footer */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-950/30">
 
-        {user ? (
+        {user && (
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2 truncate">
               {user.photoURL ? (
@@ -183,10 +183,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <LogOut size={14} />
             </button>
-          </div>
-        ) : (
-          <div className="text-[11px] text-slate-500 text-center py-1">
-            Local Session (Guest)
           </div>
         )}
       </div>

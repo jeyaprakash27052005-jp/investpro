@@ -24,7 +24,7 @@ import { ReportsView } from './views/ReportsView';
 import { BackupView } from './views/BackupView';
 
 function AppContent() {
-  const { user, isGuest, isAuthLoading } = useApp();
+  const { user, isAuthLoading } = useApp();
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -39,8 +39,7 @@ function AppContent() {
     );
   }
 
-  // If not logged in and didn't click Explore Demo
-  if (!user && !isGuest) {
+  if (!user) {
     return <LoginScreen />;
   }
 

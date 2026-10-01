@@ -32,7 +32,7 @@ const pageTitles: Record<ActivePage, { title: string; subtitle: string }> = {
 };
 
 export const Header: React.FC<HeaderProps> = ({ activePage, toggleMobileMenu, onPrint }) => {
-  const { user, selectedYear, syncStatus, signInWithGoogle, isGuest } = useApp();
+  const { user, selectedYear, syncStatus, signInWithGoogle } = useApp();
   const pageInfo = pageTitles[activePage] || { title: 'Dashboard', subtitle: '' };
 
   return (

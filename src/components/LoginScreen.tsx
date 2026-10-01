@@ -12,7 +12,7 @@ const GoogleIcon: React.FC = () => (
 );
 
 export const LoginScreen: React.FC = () => {
-  const { signInWithGoogle, continueAsGuest } = useApp();
+  const { signInWithGoogle } = useApp();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,26 +79,6 @@ export const LoginScreen: React.FC = () => {
             <span>{error}</span>
           </div>
         )}
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-5">
-          <div className="flex-1 h-px bg-slate-800" />
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider">or</span>
-          <div className="flex-1 h-px bg-slate-800" />
-        </div>
-
-        {/* Explicit, clearly-labeled guest fallback */}
-        <button
-          type="button"
-          onClick={() => continueAsGuest()}
-          className="w-full py-2.5 px-4 rounded-xl font-medium text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer"
-        >
-          Continue without an account
-        </button>
-        <p className="text-[10px] text-slate-500 text-center mt-2">
-          Guest data stays only in this browser tab — it is not saved to the cloud and is lost on refresh.
-          Sign in with Google to keep your data permanently.
-        </p>
       </div>
     </div>
   );
