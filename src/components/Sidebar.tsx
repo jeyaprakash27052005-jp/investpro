@@ -30,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const {
     user,
+    userProfile,
     signOut,
     financialYears,
     selectedYear,
@@ -162,29 +163,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* User Session Footer */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-950/30">
 
-        {user && (
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2 truncate">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center text-[10px] text-white">
-                  {user.email ? user.email[0].toUpperCase() : 'U'}
-                </div>
-              )}
-              <span className="text-[11px] text-slate-300 truncate max-w-[120px]">
-                {user.displayName || user.email}
-              </span>
+        {user && (() => {
+          const displayName = userProfile?.displayName || user.displayName || user.email;
+          const photoURL = userProfile?.photoURL || user.photoURL;
+          return (
+            <div className="flex items-center justify-between pt-1">
+              <button
+                onClick={() => handleSelectNav('profile')}
+                title="Edit profile"
+                className="flex items-center gap-2 truncate rounded-lg hover:bg-slate-800/60 -ml-1 pl-1 pr-2 py-1 transition-colors cursor-pointer"
+              >
+                {photoURL ? (
+                  <img src={photoURL} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center text-[10px] text-white shrink-0">
+                    {user.email ? user.email[0].toUpperCase() : 'U'}
+                  </div>
+                )}
+                <span className="text-[11px] text-slate-300 truncate max-w-[120px]">
+                  {displayName}
+                </span>
+              </button>
+              <button
+                onClick={() => signOut()}
+                title="Logout"
+                className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors shrink-0"
+              >
+                <LogOut size={14} />
+              </button>
             </div>
-            <button
-              onClick={() => signOut()}
-              title="Logout"
-              className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors"
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Add Year Modal */}

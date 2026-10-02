@@ -29,6 +29,7 @@ const pageTitles: Record<ActivePage, { title: string; subtitle: string }> = {
   journal: { title: 'Journal Entry', subtitle: 'Book verified double-entry debit & credit transactions' },
   reports: { title: 'Financial Accounting Statements', subtitle: 'Generate Trading Report, P&L, Trial Balance, and Balance Sheet' },
   backup: { title: 'Backup / Restore & Cloud Sync', subtitle: 'Full JSON backup, restore, and multi-device Firebase cloud state' },
+  profile: { title: 'My Profile', subtitle: 'Manage your account display name and photo' },
 };
 
 export const Header: React.FC<HeaderProps> = ({ activePage, toggleMobileMenu, onPrint }) => {

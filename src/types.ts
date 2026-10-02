@@ -123,4 +123,5 @@ export type ActivePage =
   | 'accounts'
   | 'journal'
   | 'reports'
-  | 'backup';
+  | 'backup'
+  | 'profile';

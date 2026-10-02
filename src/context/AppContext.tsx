@@ -40,6 +40,7 @@ interface AppContextType {
   isAuthLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<boolean>;
 
   // Financial Years
   financialYears: FinancialYear[];
@@ -394,6 +395,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearInterval(interval);
     };
   }, [user, currentDeviceId]);
+
+  // Profile
+  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      setSyncStatus('syncing');
+      await setDoc(
+        doc(db, 'users', user.uid),
+        { ...updates, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+      setSyncStatus('synced');
+      return true;
+    } catch (error) {
+      setSyncStatus('error');
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+      return false;
+    }
+  };
 
   // Financial Year Selection
   const setSelectedYear = async (year: string) => {
@@ -993,6 +1013,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAuthLoading,
         signInWithGoogle,
         signOut,
+        updateUserProfile,
         financialYears,
         selectedYear,
         setSelectedYear,

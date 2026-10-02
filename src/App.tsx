@@ -22,6 +22,7 @@ import { AccountsView } from './views/AccountsView';
 import { JournalView } from './views/JournalView';
 import { ReportsView } from './views/ReportsView';
 import { BackupView } from './views/BackupView';
+import { ProfileView } from './views/ProfileView';
 
 function AppContent() {
   const { user, isAuthLoading } = useApp();
@@ -67,6 +68,8 @@ function AppContent() {
         return <ReportsView onNavigate={(p) => setActivePage(p)} />;
       case 'backup':
         return <BackupView />;
+      case 'profile':
+        return <ProfileView />;
       default:
         return <DashboardView onNavigate={(p) => setActivePage(p)} />;
     }
