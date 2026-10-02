@@ -31,9 +31,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
     journals,
     summary,
     selectedYear,
+    userProfile,
   } = useApp();
 
   const [activeReport, setActiveReport] = useState<ReportType>('trading');
+
+  const reportTitles: Record<ReportType, string> = {
+    trading: 'Stock Trading Statement',
+    portfolio: 'Portfolio Holdings Statement',
+    pl: 'Profit & Loss Statement',
+    trial: 'Trial Balance',
+    balance: 'Balance Sheet',
+  };
 
   // Where the "Edit" affordance for the current report should take the owner
   const editTarget: Record<ReportType, { page: ActivePage; label: string }> = {
@@ -111,7 +120,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
   };
 
   const handleDownloadCSV = () => {
-    let csvContent = `Report: ${activeReport.toUpperCase()}\nFinancial Year: ${selectedYear}\nGenerated At: ${new Date().toISOString()}\n\n`;
+    const letterhead = [
+      userProfile?.companyName,
+      userProfile?.companyAddress?.replace(/\n/g, ', '),
+    ].filter(Boolean);
+    let csvContent =
+      (letterhead.length > 0 ? letterhead.join('\n') + '\n' : '') +
+      `Report: ${activeReport.toUpperCase()}\nFinancial Year: ${selectedYear}\nGenerated At: ${new Date().toISOString()}\n\n`;
 
     if (activeReport === 'trading') {
       csvContent += 'Date,Type,Stock,Exchange,Qty,Price,Brokerage,Realized PL\n';
@@ -198,6 +213,27 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
 
       {/* Report Canvas */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl print:p-0 print:border-none">
+        {/* Letterhead - company identity from Profile, shown above every report (on screen and when printed) */}
+        <div className="mb-5 pb-4 border-b-2 border-slate-700 print:border-black">
+          {userProfile?.companyName && (
+            <h2 className="text-xl font-bold text-white tracking-tight">{userProfile.companyName}</h2>
+          )}
+          {userProfile?.companyAddress && (
+            <p className="text-xs text-slate-400 mt-0.5 whitespace-pre-line">{userProfile.companyAddress}</p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mt-3 text-[11px] text-slate-500">
+            <span className="font-semibold">
+              {reportTitles[activeReport]} &bull; Financial Year {selectedYear}
+            </span>
+            <span>Generated on {formatDate(new Date().toISOString())}</span>
+          </div>
+          {!userProfile?.companyName && (
+            <p className="text-[11px] text-slate-600 mt-2 no-print italic">
+              Tip: add your company name and address in Profile to show a letterhead here and on printed reports.
+            </p>
+          )}
+        </div>
+
         {/* Trading Report */}
         {activeReport === 'trading' && (
           <div className="space-y-4">

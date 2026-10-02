@@ -8,6 +8,8 @@ export interface UserProfile {
   email: string;
   displayName: string;
   photoURL?: string;
+  companyName?: string;
+  companyAddress?: string;
   selectedFinancialYear: string;
   createdAt: string;
   updatedAt: string;

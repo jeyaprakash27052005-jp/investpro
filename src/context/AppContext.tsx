@@ -40,7 +40,12 @@ interface AppContextType {
   isAuthLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<boolean>;
+  updateUserProfile: (updates: {
+    displayName?: string;
+    photoURL?: string;
+    companyName?: string;
+    companyAddress?: string;
+  }) => Promise<boolean>;
 
   // Financial Years
   financialYears: FinancialYear[];
@@ -397,7 +402,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user, currentDeviceId]);
 
   // Profile
-  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<boolean> => {
+  const updateUserProfile = async (updates: {
+    displayName?: string;
+    photoURL?: string;
+    companyName?: string;
+    companyAddress?: string;
+  }): Promise<boolean> => {
     if (!user) return false;
     try {
       setSyncStatus('syncing');

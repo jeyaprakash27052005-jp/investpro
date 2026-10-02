@@ -9,13 +9,23 @@
     color: black !important;
     padding: 0 !important;
   }
+  /* Most report text uses Tailwind color utilities (text-white, text-slate-400,
+     text-emerald-400, etc.) which, being class selectors, override the plain
+     `body { color: black }` rule above. Force every element inside the
+     printed area to black-on-transparent so nothing renders as invisible
+     white-on-white text or a dark card background on paper. */
+  main * {
+    color: black !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
   table {
     border-collapse: collapse !important;
     width: 100% !important;
-    color: black !important;
   }
   th, td {
-    border: 1px solid #cbd5e1 !important;
-    color: black !important;
+    border: 1px solid #94a3b8 !important;
   }
 }

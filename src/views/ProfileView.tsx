@@ -10,6 +10,8 @@ import {
   CheckCircle,
   AlertTriangle,
   Fingerprint,
+  Building2,
+  MapPin,
 } from 'lucide-react';
 
 export const ProfileView: React.FC = () => {
@@ -17,9 +19,13 @@ export const ProfileView: React.FC = () => {
 
   const baselineName = userProfile?.displayName || user?.displayName || '';
   const baselinePhoto = userProfile?.photoURL || user?.photoURL || '';
+  const baselineCompanyName = userProfile?.companyName || '';
+  const baselineCompanyAddress = userProfile?.companyAddress || '';
 
   const [displayName, setDisplayName] = useState(baselineName);
   const [photoURL, setPhotoURL] = useState(baselinePhoto);
+  const [companyName, setCompanyName] = useState(baselineCompanyName);
+  const [companyAddress, setCompanyAddress] = useState(baselineCompanyAddress);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
@@ -28,10 +34,16 @@ export const ProfileView: React.FC = () => {
   useEffect(() => {
     setDisplayName(baselineName);
     setPhotoURL(baselinePhoto);
+    setCompanyName(baselineCompanyName);
+    setCompanyAddress(baselineCompanyAddress);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baselineName, baselinePhoto]);
+  }, [baselineName, baselinePhoto, baselineCompanyName, baselineCompanyAddress]);
 
-  const isDirty = displayName.trim() !== baselineName || photoURL.trim() !== baselinePhoto;
+  const isDirty =
+    displayName.trim() !== baselineName ||
+    photoURL.trim() !== baselinePhoto ||
+    companyName.trim() !== baselineCompanyName ||
+    companyAddress.trim() !== baselineCompanyAddress;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +56,8 @@ export const ProfileView: React.FC = () => {
     const ok = await updateUserProfile({
       displayName: displayName.trim(),
       photoURL: photoURL.trim(),
+      companyName: companyName.trim(),
+      companyAddress: companyAddress.trim(),
     });
     setIsSaving(false);
     setStatus(
@@ -116,6 +130,41 @@ export const ProfileView: React.FC = () => {
             />
           </div>
 
+          <div className="pt-4 border-t border-slate-800">
+            <h3 className="text-xs font-bold text-white mb-1">Company Details</h3>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Shown as the letterhead on printed and exported Financial Reports. Leave blank to print without a company header.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 mb-1.5">
+                  <Building2 size={12} /> Company Name
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Sharma Trading & Investments Pvt. Ltd."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 mb-1.5">
+                  <MapPin size={12} /> Company Address
+                </label>
+                <textarea
+                  value={companyAddress}
+                  onChange={(e) => setCompanyAddress(e.target.value)}
+                  placeholder={'123 MG Road, Bengaluru, Karnataka 560001\nGSTIN: 29ABCDE1234F1Z5'}
+                  rows={3}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -131,6 +180,8 @@ export const ProfileView: React.FC = () => {
                 onClick={() => {
                   setDisplayName(baselineName);
                   setPhotoURL(baselinePhoto);
+                  setCompanyName(baselineCompanyName);
+                  setCompanyAddress(baselineCompanyAddress);
                   setStatus(null);
                 }}
                 className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
