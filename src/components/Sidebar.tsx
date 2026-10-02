@@ -74,14 +74,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-200 flex flex-col h-full select-none">
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-800/80 bg-slate-950/40">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/20">
-            IP
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/20 shrink-0">
+              IP
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-bold text-base text-white tracking-wide">INVEST PRO</h1>
+              <p className="text-[11px] text-cyan-400 font-medium">Investment • Trading • Accounting</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-base text-white tracking-wide">INVEST PRO</h1>
-            <p className="text-[11px] text-cyan-400 font-medium">Investment • Trading • Accounting</p>
-          </div>
+
+          {user && (() => {
+            const photoURL = userProfile?.photoURL || user.photoURL;
+            const initial = (userProfile?.displayName || user.displayName || user.email || 'U').trim()[0]?.toUpperCase() || 'U';
+            return (
+              <button
+                onClick={() => handleSelectNav('profile')}
+                title="Edit profile"
+                className="shrink-0 rounded-full hover:ring-2 hover:ring-cyan-500/50 transition-all cursor-pointer"
+              >
+                {photoURL ? (
+                  <img src={photoURL} alt="" className="w-9 h-9 rounded-full" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-cyan-600 flex items-center justify-center text-xs font-semibold text-white">
+                    {initial}
+                  </div>
+                )}
+              </button>
+            );
+          })()}
         </div>
 
         {/* Real-time Sync Status Pill */}
@@ -160,41 +182,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* User Session Footer */}
-      <div className="p-3 border-t border-slate-800/80 bg-slate-950/30">
-
-        {user && (() => {
-          const displayName = userProfile?.displayName || user.displayName || user.email;
-          const photoURL = userProfile?.photoURL || user.photoURL;
-          return (
-            <div className="flex items-center justify-between pt-1">
-              <button
-                onClick={() => handleSelectNav('profile')}
-                title="Edit profile"
-                className="flex items-center gap-2 truncate rounded-lg hover:bg-slate-800/60 -ml-1 pl-1 pr-2 py-1 transition-colors cursor-pointer"
-              >
-                {photoURL ? (
-                  <img src={photoURL} alt="" className="w-6 h-6 rounded-full shrink-0" />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center text-[10px] text-white shrink-0">
-                    {user.email ? user.email[0].toUpperCase() : 'U'}
-                  </div>
-                )}
-                <span className="text-[11px] text-slate-300 truncate max-w-[120px]">
-                  {displayName}
-                </span>
-              </button>
-              <button
-                onClick={() => signOut()}
-                title="Logout"
-                className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors shrink-0"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
-          );
-        })()}
-      </div>
+      {/* Sign Out Footer */}
+      {user && (
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/30">
+          <button
+            onClick={() => signOut()}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 transition-colors cursor-pointer"
+          >
+            <LogOut size={14} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      )}
 
       {/* Add Year Modal */}
       {showAddYearModal && (

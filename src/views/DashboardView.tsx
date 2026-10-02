@@ -27,8 +27,6 @@ import {
   Briefcase,
   FileSpreadsheet,
   ArrowRight,
-  Smartphone,
-  CheckCircle2,
   Clock,
   PieChart as PieChartIcon,
   BarChart3,
@@ -59,7 +57,7 @@ const EmptyChartState: React.FC<{ message: string }> = ({ message }) => (
 );
 
 export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }> = ({ onNavigate }) => {
-  const { summary, portfolioHoldings, trades, incomes, expenses, syncedDevices, selectedYear } = useApp();
+  const { summary, portfolioHoldings, trades, incomes, expenses, selectedYear } = useApp();
 
   const isNetPositive = summary.netProfit >= 0;
 
@@ -197,35 +195,6 @@ export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }>
 
   return (
     <div className="space-y-6">
-      {/* Real-time Cross Device Sync Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-900/40 rounded-2xl p-4 lg:p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 mt-0.5">
-            <Smartphone size={22} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-white text-sm">Real-Time Cloud Synchronization Active</h3>
-              <span className="flex items-center gap-1 text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                <CheckCircle2 size={12} /> Live Firebase Firestore
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5 max-w-2xl">
-              Any buy/sell trade or spreadsheet imported here updates instantly across Android, iOS, and Web devices in sub-second latency.
-            </p>
-          </div>
-        </div>
-
-        {/* Connected devices count pill */}
-        <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60 self-stretch md:self-auto justify-between md:justify-start">
-          <span className="text-slate-400">Connected Devices:</span>
-          <div className="flex items-center gap-1.5 font-medium text-white">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>{syncedDevices.length > 0 ? syncedDevices.length : 1} Active</span>
-          </div>
-        </div>
-      </div>
-
       {/* KPI Financial Cards (Matches user's HTML exact cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Total Investment */}
