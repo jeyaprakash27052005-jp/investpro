@@ -159,7 +159,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       {/* Report Selection Tabs */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="print:hidden bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
           {[
             { id: 'trading', label: 'Trading Report', icon: <TrendingUp size={14} /> },
