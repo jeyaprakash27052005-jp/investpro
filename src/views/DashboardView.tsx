@@ -1,6 +1,21 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  AreaChart,
+  Area,
+} from 'recharts';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatCompactCurrency, formatDateTime } from '../utils/formatters';
 import type { ActivePage } from '../types';
 import {
   TrendingUp,
@@ -15,13 +30,107 @@ import {
   Smartphone,
   CheckCircle2,
   Clock,
-  Laptop,
+  PieChart as PieChartIcon,
+  BarChart3,
+  Activity,
 } from 'lucide-react';
 
+const CHART_COLORS = ['#22d3ee', '#6366f1', '#34d399', '#fb7185', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6'];
+
+const CHART_TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: '#0f172a',
+    border: '1px solid #334155',
+    borderRadius: 12,
+    fontSize: 11,
+    padding: '8px 12px',
+  },
+  labelStyle: { color: '#94a3b8', marginBottom: 4 },
+  itemStyle: { color: '#e2e8f0' },
+};
+
+const EmptyChartState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="flex-1 flex flex-col items-center justify-center py-14 text-center text-slate-500">
+    <BarChart3 size={28} className="mb-2 opacity-30" />
+    <p className="text-xs">{message}</p>
+  </div>
+);
+
 export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }> = ({ onNavigate }) => {
-  const { summary, portfolioHoldings, trades, syncedDevices, selectedYear } = useApp();
+  const { summary, portfolioHoldings, trades, incomes, expenses, syncedDevices, selectedYear } = useApp();
 
   const isNetPositive = summary.netProfit >= 0;
+
+  // Portfolio allocation by current holdings' investment value (top 7 + "Others")
+  const allocationData = useMemo(() => {
+    const sorted = [...portfolioHoldings]
+      .filter((h) => h.totalInvestment > 0)
+      .sort((a, b) => b.totalInvestment - a.totalInvestment);
+    const top = sorted.slice(0, 7);
+    const rest = sorted.slice(7);
+    const restTotal = rest.reduce((sum, h) => sum + h.totalInvestment, 0);
+    const data = top.map((h) => ({ name: h.stockName, value: Number(h.totalInvestment.toFixed(2)) }));
+    if (restTotal > 0) data.push({ name: 'Others', value: Number(restTotal.toFixed(2)) });
+    return data;
+  }, [portfolioHoldings]);
+
+  // Monthly BUY vs SELL trade value for the selected financial year
+  const monthlyTradeData = useMemo(() => {
+    const map = new Map<string, { month: string; Buy: number; Sell: number }>();
+    trades
+      .filter((t) => t.financialYear === selectedYear)
+      .forEach((t) => {
+        const d = new Date(t.dateTime);
+        if (isNaN(d.getTime())) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        if (!map.has(key)) map.set(key, { month: label, Buy: 0, Sell: 0 });
+        const entry = map.get(key)!;
+        const value = Number(t.execQty) * Number(t.orderPrice);
+        if (t.tradeType === 'BUY') entry.Buy += value;
+        else entry.Sell += value;
+      });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => ({ ...v, Buy: Number(v.Buy.toFixed(2)), Sell: Number(v.Sell.toFixed(2)) }));
+  }, [trades, selectedYear]);
+
+  // Cumulative realized P/L across SELL trades, chronologically, for the selected year
+  const cumulativePLData = useMemo(() => {
+    const sellTrades = trades
+      .filter((t) => t.financialYear === selectedYear && t.tradeType === 'SELL')
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+    let running = 0;
+    return sellTrades.map((t) => {
+      running += Number(t.realizedPL) || 0;
+      return {
+        date: new Date(t.dateTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        cumulative: Number(running.toFixed(2)),
+      };
+    });
+  }, [trades, selectedYear]);
+
+  // Monthly income vs expense for the selected financial year
+  const monthlyIncomeExpenseData = useMemo(() => {
+    const map = new Map<string, { month: string; Income: number; Expense: number }>();
+    const upsert = (dateStr: string, field: 'Income' | 'Expense', amount: number) => {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      if (!map.has(key)) map.set(key, { month: label, Income: 0, Expense: 0 });
+      map.get(key)![field] += amount;
+    };
+    incomes
+      .filter((i) => i.financialYear === selectedYear)
+      .forEach((i) => upsert(i.date, 'Income', Number(i.amount) || 0));
+    expenses
+      .filter((e) => e.financialYear === selectedYear)
+      .forEach((e) => upsert(e.date, 'Expense', Number(e.amount) || 0));
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => ({ ...v, Income: Number(v.Income.toFixed(2)), Expense: Number(v.Expense.toFixed(2)) }));
+  }, [incomes, expenses, selectedYear]);
 
   return (
     <div className="space-y-6">
@@ -226,6 +335,147 @@ export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }>
           </div>
           <ArrowRight size={14} className="opacity-40 group-hover:opacity-100 transition-opacity" />
         </button>
+      </div>
+
+      {/* Analytics: Portfolio Allocation + Monthly Trading Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Portfolio Allocation Donut */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <PieChartIcon size={15} className="text-cyan-400" />
+            <h3 className="text-sm font-bold text-white">Portfolio Allocation</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Investment value by holding, FY {selectedYear}</p>
+
+          {allocationData.length === 0 ? (
+            <EmptyChartState message="No active holdings to chart yet" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={allocationData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {allocationData.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  {...CHART_TOOLTIP_STYLE}
+                  formatter={(value: any) => formatCurrency(Number(value))}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  wrapperStyle={{ fontSize: 10, color: '#94a3b8' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Monthly Trading Activity */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart3 size={15} className="text-indigo-400" />
+            <h3 className="text-sm font-bold text-white">Monthly Trading Activity</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Buy vs sell value by month, FY {selectedYear}</p>
+
+          {monthlyTradeData.length === 0 ? (
+            <EmptyChartState message="No trades recorded in this financial year" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={monthlyTradeData} margin={{ left: -10, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
+                <YAxis
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => formatCompactCurrency(v)}
+                  width={56}
+                />
+                <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                <Legend wrapperStyle={{ fontSize: 10, color: '#94a3b8' }} />
+                <Bar dataKey="Buy" fill="#34d399" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Sell" fill="#fb7185" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Cumulative Realized P/L Trend */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+        <div className="flex items-center gap-2 mb-1">
+          <Activity size={15} className="text-emerald-400" />
+          <h3 className="text-sm font-bold text-white">Cumulative Realized P/L</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Running profit/loss across sell trades, FY {selectedYear}</p>
+
+        {cumulativePLData.length === 0 ? (
+          <EmptyChartState message="No sell trades recorded in this financial year" />
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={cumulativePLData} margin={{ left: -10, right: 10 }}>
+              <defs>
+                <linearGradient id="plGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => formatCompactCurrency(v)}
+                width={56}
+              />
+              <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} />
+              <Area type="monotone" dataKey="cumulative" stroke="#22d3ee" strokeWidth={2} fill="url(#plGradient)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Income vs Expense */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+        <div className="flex items-center gap-2 mb-1">
+          <PiggyBank size={15} className="text-amber-400" />
+          <h3 className="text-sm font-bold text-white">Income vs Expenses</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">Monthly comparison, FY {selectedYear}</p>
+
+        {monthlyIncomeExpenseData.length === 0 ? (
+          <EmptyChartState message="No income or expense entries in this financial year" />
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={monthlyIncomeExpenseData} margin={{ left: -10, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => formatCompactCurrency(v)}
+                width={56}
+              />
+              <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+              <Legend wrapperStyle={{ fontSize: 10, color: '#94a3b8' }} />
+              <Bar dataKey="Income" fill="#34d399" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Expense" fill="#fbbf24" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Grid: Active Portfolio Holdings + Recent Transactions */}
