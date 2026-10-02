@@ -33,6 +33,8 @@ import {
   PieChart as PieChartIcon,
   BarChart3,
   Activity,
+  Award,
+  Target,
 } from 'lucide-react';
 
 const CHART_COLORS = ['#22d3ee', '#6366f1', '#34d399', '#fb7185', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6'];
@@ -131,6 +133,67 @@ export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }>
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => ({ ...v, Income: Number(v.Income.toFixed(2)), Expense: Number(v.Expense.toFixed(2)) }));
   }, [incomes, expenses, selectedYear]);
+
+  // Expense breakdown by category for the selected financial year
+  const expenseByCategoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    expenses
+      .filter((e) => e.financialYear === selectedYear)
+      .forEach((e) => {
+        const key = e.category?.trim() || 'Uncategorized';
+        map.set(key, (map.get(key) || 0) + (Number(e.amount) || 0));
+      });
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses, selectedYear]);
+
+  // Income breakdown by category for the selected financial year
+  const incomeByCategoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    incomes
+      .filter((i) => i.financialYear === selectedYear)
+      .forEach((i) => {
+        const key = i.category?.trim() || 'Uncategorized';
+        map.set(key, (map.get(key) || 0) + (Number(i.amount) || 0));
+      });
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  }, [incomes, selectedYear]);
+
+  // Top 5 gainers and top 5 losers by realized P/L (SELL trades) for the selected year
+  const stockPLData = useMemo(() => {
+    const map = new Map<string, number>();
+    trades
+      .filter((t) => t.financialYear === selectedYear && t.tradeType === 'SELL')
+      .forEach((t) => {
+        const key = t.stockName.trim().toUpperCase();
+        map.set(key, (map.get(key) || 0) + (Number(t.realizedPL) || 0));
+      });
+    const all = Array.from(map.entries()).map(([name, pl]) => ({ name, pl: Number(pl.toFixed(2)) }));
+    const gainers = all.filter((a) => a.pl > 0).sort((a, b) => b.pl - a.pl).slice(0, 5);
+    const losers = all.filter((a) => a.pl < 0).sort((a, b) => a.pl - b.pl).slice(0, 5);
+    // Sort the combined top-5-each set ascending so the biggest loss is at
+    // one end and the biggest gain at the other, with no zigzag in between
+    return [...losers, ...gainers].sort((a, b) => a.pl - b.pl);
+  }, [trades, selectedYear]);
+
+  // Win rate across closed (SELL) positions for the selected year
+  const winRateData = useMemo(() => {
+    const sells = trades.filter((t) => t.financialYear === selectedYear && t.tradeType === 'SELL');
+    const profitable = sells.filter((t) => (Number(t.realizedPL) || 0) > 0).length;
+    const lossMaking = sells.length - profitable;
+    if (sells.length === 0) return { data: [], total: 0, winPct: 0 };
+    return {
+      data: [
+        { name: 'Profitable', value: profitable },
+        { name: 'Loss-making', value: lossMaking },
+      ],
+      total: sells.length,
+      winPct: Math.round((profitable / sells.length) * 100),
+    };
+  }, [trades, selectedYear]);
 
   return (
     <div className="space-y-6">
@@ -447,6 +510,88 @@ export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }>
         )}
       </div>
 
+      {/* Top Gainers/Losers + Win Rate */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top Stocks by Realized P/L */}
+        <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <Award size={15} className="text-amber-400" />
+            <h3 className="text-sm font-bold text-white">Top Gainers &amp; Losers</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Realized P/L by stock, closed positions, FY {selectedYear}</p>
+
+          {stockPLData.length === 0 ? (
+            <EmptyChartState message="No closed (sell) trades in this financial year" />
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(220, stockPLData.length * 34)}>
+              <BarChart data={stockPLData} layout="vertical" margin={{ left: 0, right: 16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  axisLine={{ stroke: '#334155' }}
+                  tickLine={false}
+                  tickFormatter={(v) => formatCompactCurrency(v)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fill: '#cbd5e1', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={90}
+                />
+                <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                <Bar dataKey="pl" radius={[0, 4, 4, 0]}>
+                  {stockPLData.map((entry, i) => (
+                    <Cell key={i} fill={entry.pl >= 0 ? '#34d399' : '#fb7185'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Win Rate */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <Target size={15} className="text-cyan-400" />
+            <h3 className="text-sm font-bold text-white">Win Rate</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Closed positions, FY {selectedYear}</p>
+
+          {winRateData.data.length === 0 ? (
+            <EmptyChartState message="No closed (sell) trades in this financial year" />
+          ) : (
+            <div className="relative flex-1 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={winRateData.data}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={3}
+                  >
+                    <Cell fill="#34d399" stroke="#0f172a" strokeWidth={2} />
+                    <Cell fill="#fb7185" stroke="#0f172a" strokeWidth={2} />
+                  </Pie>
+                  <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => `${value} trade${value === 1 ? '' : 's'}`} />
+                  <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 10, color: '#94a3b8' }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute top-[42%] -translate-y-1/2 flex flex-col items-center pointer-events-none">
+                <span className="text-2xl font-bold text-white">{winRateData.winPct}%</span>
+                <span className="text-[10px] text-slate-500">of {winRateData.total} trades</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Income vs Expense */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
         <div className="flex items-center gap-2 mb-1">
@@ -476,6 +621,77 @@ export const DashboardView: React.FC<{ onNavigate: (page: ActivePage) => void }>
             </BarChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      {/* Expense & Income Category Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Expense by Category */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <Receipt size={15} className="text-rose-400" />
+            <h3 className="text-sm font-bold text-white">Expense by Category</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Where spending went, FY {selectedYear}</p>
+
+          {expenseByCategoryData.length === 0 ? (
+            <EmptyChartState message="No expense entries in this financial year" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={expenseByCategoryData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {expenseByCategoryData.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} />
+                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 10, color: '#94a3b8' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Income by Category */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col">
+          <div className="flex items-center gap-2 mb-1">
+            <PiggyBank size={15} className="text-emerald-400" />
+            <h3 className="text-sm font-bold text-white">Income by Category</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Where revenue came from, FY {selectedYear}</p>
+
+          {incomeByCategoryData.length === 0 ? (
+            <EmptyChartState message="No income entries in this financial year" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={incomeByCategoryData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {incomeByCategoryData.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[(i + 3) % CHART_COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip {...CHART_TOOLTIP_STYLE} formatter={(value: any) => formatCurrency(Number(value))} />
+                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 10, color: '#94a3b8' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* Grid: Active Portfolio Holdings + Recent Transactions */}
