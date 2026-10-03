@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, getTodayLocalISO } from '../utils/formatters';
 import { FileText, Plus, Trash2, Pencil, X, CheckCircle, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
 const EXCHANGE_OPTIONS = ['', 'NSE', 'BSE', 'MCX', 'NSE-MCX'];
@@ -20,7 +20,7 @@ const VOUCHER_TYPE_OPTIONS = [
 export const JournalView: React.FC = () => {
   const { journals, addJournal, updateJournal, deleteJournal, accounts, selectedYear } = useApp();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayLocalISO();
   const [date, setDate] = useState(today); // Trd Date
   const [dueDate, setDueDate] = useState('');
   const [exchange, setExchange] = useState('');

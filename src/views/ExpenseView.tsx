@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, getTodayLocalISO } from '../utils/formatters';
 import { Receipt, Plus, Trash2, Pencil, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 export const ExpenseView: React.FC = () => {
   const { expenses, addExpense, updateExpense, deleteExpense, selectedYear } = useApp();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayLocalISO();
   const [date, setDate] = useState(today);
   const [category, setCategory] = useState('Brokerage Charges');
   const [description, setDescription] = useState('');

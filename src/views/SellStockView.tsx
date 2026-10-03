@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatDateTime, getNowLocalISODateTime } from '../utils/formatters';
 import type { OrderType, ProductType } from '../types';
 import {
   TrendingDown,
@@ -21,12 +21,7 @@ export const SellStockView: React.FC = () => {
   const sellTrades = trades.filter((t) => t.tradeType === 'SELL' && t.financialYear === selectedYear);
 
   // Form State
-  const now = new Date();
-  const defaultDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-
-  const [dateTime, setDateTime] = useState(defaultDateTime);
+  const [dateTime, setDateTime] = useState(getNowLocalISODateTime());
   const [selectedStockKey, setSelectedStockKey] = useState('');
   const [exchange, setExchange] = useState('NSE');
   const [orderQty, setOrderQty] = useState('');

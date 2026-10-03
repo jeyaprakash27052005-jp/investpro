@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useApp } from '../context/AppContext';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getTodayLocalISO, getNowLocalISODateTime } from '../utils/formatters';
 import type { StockTrade, TradeType, OrderType, ProductType, AccountType } from '../types';
 import {
   FileSpreadsheet,
@@ -155,24 +155,87 @@ export const ExcelImportView: React.FC = () => {
     processSpreadsheet(selected, importAction);
   };
 
-  const parseDateCell = (rawDate: any): string => {
-    let dateIso = new Date().toISOString().slice(0, 10);
-    if (rawDate) {
-      const parsedDate = new Date(rawDate);
-      if (!isNaN(parsedDate.getTime())) {
-        dateIso = parsedDate.toISOString().slice(0, 10);
+  // --- Robust date-cell parsing ---
+  // Plain `new Date(rawDate)` on a spreadsheet cell is unreliable in three
+  // common cases that were corrupting imported entry dates:
+  //  1. The cell isn't recognised as an Excel "date" type (common in CSV
+  //     exports or text-formatted columns), so the library hands back the
+  //     raw Excel serial NUMBER (e.g. 46660) instead of a Date object.
+  //     `new Date(46660)` reads that as milliseconds since 1970 and lands
+  //     on 1 Jan 1970 — nowhere near the real date.
+  //  2. The cell is a plain string in "DD-MM-YYYY" / "DD/MM/YYYY" form
+  //     (how Indian broker ledgers normally print dates). JS's native
+  //     Date parser treats ambiguous slash/dash dates as US "MM/DD/YYYY",
+  //     silently swapping day and month for anything where both are <=12.
+  //  3. Even when the library *does* return a proper Date object (or a
+  //     clean "YYYY-MM-DD" string), re-deriving the calendar date with
+  //     local-timezone getters elsewhere in the app can shift it by a day
+  //     for users east of UTC (e.g. IST, UTC+5:30). Everything below stays
+  //     in UTC-based arithmetic end to end so the calendar date entered in
+  //     the file is exactly the calendar date stored, in every timezone.
+  const EXCEL_SERIAL_EPOCH_MS = Date.UTC(1899, 11, 30);
+  const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+  const excelSerialToDate = (serial: number): Date => new Date(EXCEL_SERIAL_EPOCH_MS + serial * 86400000);
+
+  const parseDateString = (raw: string): Date | null => {
+    const s = raw.trim();
+    if (!s) return null;
+
+    // ISO: YYYY-MM-DD (optionally with a time suffix)
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) {
+      const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+      if (!isNaN(dt.getTime())) return dt;
+    }
+
+    // DD-MM-YYYY, DD/MM/YYYY or DD.MM.YYYY (2 or 4 digit year)
+    m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+    if (m) {
+      let day = +m[1];
+      let month = +m[2];
+      let year = +m[3];
+      if (year < 100) year += year < 50 ? 2000 : 1900;
+      if (month > 12 && day <= 12) [day, month] = [month, day]; // defensive swap
+      const dt = new Date(Date.UTC(year, month - 1, day));
+      if (!isNaN(dt.getTime())) return dt;
+    }
+
+    // DD-MMM-YYYY / DD MMM YYYY (e.g. "03-Oct-2026")
+    m = s.match(/^(\d{1,2})[/\-\s]([A-Za-z]{3,})[/\-\s](\d{2,4})$/);
+    if (m) {
+      const idx = MONTH_NAMES.findIndex((mn) => m![2].toLowerCase().startsWith(mn));
+      if (idx >= 0) {
+        let year = +m[3];
+        if (year < 100) year += year < 50 ? 2000 : 1900;
+        const dt = new Date(Date.UTC(year, idx, +m[1]));
+        if (!isNaN(dt.getTime())) return dt;
       }
     }
-    return dateIso;
+
+    // Last resort: native parsing (handles "October 3, 2026", full ISO timestamps, etc.)
+    const native = new Date(s);
+    return isNaN(native.getTime()) ? null : native;
+  };
+
+  const parseAnyDateCell = (raw: any): Date | null => {
+    if (raw === null || raw === undefined || raw === '') return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    if (typeof raw === 'number') return isNaN(raw) ? null : excelSerialToDate(raw);
+    if (typeof raw === 'string') return parseDateString(raw);
+    return null;
+  };
+
+  const parseDateCell = (rawDate: any): string => {
+    const dt = parseAnyDateCell(rawDate);
+    return dt ? dt.toISOString().slice(0, 10) : getTodayLocalISO();
   };
 
   // Like parseDateCell, but returns undefined instead of defaulting to today
   // — for optional fields (e.g. Due Date) where a blank cell should stay blank.
   const parseOptionalDateCell = (rawDate: any): string | undefined => {
-    if (!rawDate) return undefined;
-    const parsedDate = new Date(rawDate);
-    if (isNaN(parsedDate.getTime())) return undefined;
-    return parsedDate.toISOString().slice(0, 10);
+    const dt = parseAnyDateCell(rawDate);
+    return dt ? dt.toISOString().slice(0, 10) : undefined;
   };
 
   const processSpreadsheet = async (
@@ -274,12 +337,10 @@ export const ExcelImportView: React.FC = () => {
       }
 
       const rawDate = getCol(row, 'date & time', 'date', 'trade date', 'time', 'execution date');
-      let dateTimeIso = new Date().toISOString().slice(0, 16);
-      if (rawDate) {
-        const parsedDate = new Date(rawDate);
-        if (!isNaN(parsedDate.getTime())) {
-          dateTimeIso = parsedDate.toISOString().slice(0, 16);
-        }
+      let dateTimeIso = getNowLocalISODateTime();
+      const parsedDate = parseAnyDateCell(rawDate);
+      if (parsedDate) {
+        dateTimeIso = parsedDate.toISOString().slice(0, 16);
       }
 
       const exchange = String(getCol(row, 'exchange', 'exch', 'market') || 'NSE').toUpperCase();
