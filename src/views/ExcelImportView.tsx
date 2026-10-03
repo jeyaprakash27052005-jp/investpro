@@ -51,6 +51,12 @@ interface IncomeExpenseRowPreview {
 
 interface JournalRowPreview {
   date: string;
+  dueDate?: string;
+  exchange?: string;
+  segment?: string;
+  voucherType?: string;
+  voucherNo?: string;
+  billNo?: string;
   debitAccountName: string;
   creditAccountName: string;
   debitAccountId: string;
@@ -91,6 +97,12 @@ export const ExcelImportView: React.FC = () => {
   const [importType, setImportType] = useState<ImportType>('trades');
   const [file, setFile] = useState<File | null>(null);
   const [importAction, setImportAction] = useState<'AUTO' | 'BUY' | 'SELL'>('AUTO');
+  // Used only for journal files shaped like a single-account ledger export
+  // (Dr Amount / Cr Amount columns, no Debit/Credit Account name columns) —
+  // tells the importer which Chart of Accounts entry the statement belongs
+  // to, and which account to post the other side of each voucher to.
+  const [journalLedgerAccountId, setJournalLedgerAccountId] = useState('');
+  const [journalContraAccountId, setJournalContraAccountId] = useState('');
 
   const [tradeRows, setTradeRows] = useState<TradeRowPreview[]>([]);
   const [incExpRows, setIncExpRows] = useState<IncomeExpenseRowPreview[]>([]);
@@ -154,7 +166,21 @@ export const ExcelImportView: React.FC = () => {
     return dateIso;
   };
 
-  const processSpreadsheet = async (fileToRead: File, actionPreference: 'AUTO' | 'BUY' | 'SELL') => {
+  // Like parseDateCell, but returns undefined instead of defaulting to today
+  // — for optional fields (e.g. Due Date) where a blank cell should stay blank.
+  const parseOptionalDateCell = (rawDate: any): string | undefined => {
+    if (!rawDate) return undefined;
+    const parsedDate = new Date(rawDate);
+    if (isNaN(parsedDate.getTime())) return undefined;
+    return parsedDate.toISOString().slice(0, 10);
+  };
+
+  const processSpreadsheet = async (
+    fileToRead: File,
+    actionPreference: 'AUTO' | 'BUY' | 'SELL',
+    ledgerAccountOverride?: string,
+    contraAccountOverride?: string
+  ) => {
     setIsProcessing(true);
     setErrorMsg(null);
     setImportResult(null);
@@ -195,12 +221,14 @@ export const ExcelImportView: React.FC = () => {
           );
         }
       } else if (importType === 'journal') {
-        const rows = parseJournalRows(rawData);
+        const ledgerId = ledgerAccountOverride !== undefined ? ledgerAccountOverride : journalLedgerAccountId;
+        const contraId = contraAccountOverride !== undefined ? contraAccountOverride : journalContraAccountId;
+        const rows = parseJournalRows(rawData, ledgerId, contraId);
         setJournalRows(rows);
         if (rows.length === 0) {
           setErrorMsg(
-            `Found ${rawData.length} row(s) but none had a Debit Account, Credit Account or Amount. ` +
-            `Expected columns named "Debit Account", "Credit Account" and "Amount". ` +
+            `Found ${rawData.length} row(s) but none had a Debit Account/Credit Account pair, a Dr Amount/Cr Amount, or an Amount column. ` +
+            `Expected either "Debit Account" + "Credit Account" + "Amount", or "Dr Amount" + "Cr Amount" (a single-account ledger export — pick the Ledger Account and Contra Account above). ` +
             `Your file's columns: ${sourceColumns.join(', ') || '(none detected)'}`
           );
         }
@@ -323,29 +351,88 @@ export const ExcelImportView: React.FC = () => {
   };
 
   // ---- Journal Vouchers ----
-  const parseJournalRows = (rawData: Record<string, any>[]): JournalRowPreview[] => {
+  // Supports two shapes of source file:
+  //  1. A proper double-entry export with "Debit Account" / "Credit Account"
+  //     name columns and a single "Amount".
+  //  2. A broker-style single-account "Financial Ledger" export — Sr No, Trd
+  //     Date, Due Date, Exchange, Seg, Narration, Voucher Type, Voucher No,
+  //     Bill No, Dr Amount, Cr Amount, Running Balance — which names no
+  //     second account at all. For that shape, every row posts against the
+  //     chosen Ledger Account, balanced against the chosen Contra Account.
+  const parseJournalRows = (
+    rawData: Record<string, any>[],
+    ledgerAccountId: string,
+    contraAccountId: string
+  ): JournalRowPreview[] => {
+    const ledgerAcc = accounts.find((a) => a.id === ledgerAccountId);
+    const contraAcc = accounts.find((a) => a.id === contraAccountId);
     const rows: JournalRowPreview[] = [];
-    for (const row of rawData) {
-      const amount = Math.abs(Number(getCol(row, 'amount', 'value')) || 0);
-      const debitName = String(getCol(row, 'debit account', 'debit', 'dr account', 'dr') || '').trim();
-      const creditName = String(getCol(row, 'credit account', 'credit', 'cr account', 'cr') || '').trim();
-      if (!debitName && !creditName && amount <= 0) continue;
 
-      const date = parseDateCell(getCol(row, 'date', 'voucher date'));
+    for (const row of rawData) {
+      const debitNameRaw = String(getCol(row, 'debit account', 'debit', 'dr account') || '').trim();
+      const creditNameRaw = String(getCol(row, 'credit account', 'credit', 'cr account') || '').trim();
+      const genericAmount = Math.abs(Number(getCol(row, 'amount', 'value')) || 0);
+      const drAmount = Math.abs(Number(getCol(row, 'dr amount', 'debit amount', 'dr amt')) || 0);
+      const crAmount = Math.abs(Number(getCol(row, 'cr amount', 'credit amount', 'cr amt')) || 0);
+
+      if (!debitNameRaw && !creditNameRaw && genericAmount <= 0 && drAmount <= 0 && crAmount <= 0) continue;
+
+      const date = parseDateCell(getCol(row, 'trd date', 'trade date', 'date', 'voucher date'));
+      const dueDate = parseOptionalDateCell(getCol(row, 'due date'));
+      const exchange = String(getCol(row, 'exchange', 'exch') || '').trim() || undefined;
+      const segment = String(getCol(row, 'seg', 'segment') || '').trim() || undefined;
+      const voucherType = String(getCol(row, 'voucher type') || '').trim() || undefined;
+      const voucherNo = String(getCol(row, 'voucher no', 'voucher number', 'voucher no.') || '').trim() || undefined;
+      const billNo = String(getCol(row, 'bill no', 'bill number', 'bill no.') || '').trim() || undefined;
       const narration = String(getCol(row, 'narration', 'description', 'remarks', 'particulars') || 'Imported journal entry').trim();
+
+      let debitName = debitNameRaw;
+      let creditName = creditNameRaw;
+      let amount = genericAmount;
+      let errorText: string | undefined;
+
+      if (debitNameRaw || creditNameRaw) {
+        // Shape 1: explicit account name columns.
+        if (!debitNameRaw || !creditNameRaw) errorText = 'Missing debit/credit account name';
+      } else if (drAmount > 0 && crAmount > 0) {
+        errorText = 'Row has both Dr Amount and Cr Amount filled';
+        amount = drAmount;
+      } else if (drAmount > 0 || crAmount > 0) {
+        // Shape 2: single-account ledger export.
+        if (!ledgerAcc || !contraAcc) {
+          errorText = 'Select a Ledger Account and a Contra Account above to import Dr Amount / Cr Amount columns';
+          amount = drAmount || crAmount;
+        } else if (drAmount > 0) {
+          debitName = ledgerAcc.name;
+          creditName = contraAcc.name;
+          amount = drAmount;
+        } else {
+          debitName = contraAcc.name;
+          creditName = ledgerAcc.name;
+          amount = crAmount;
+        }
+      } else {
+        errorText = 'No Debit/Credit Account or Dr/Cr Amount found on this row';
+      }
 
       const debitAcc = accounts.find((a) => a.name.trim().toLowerCase() === debitName.toLowerCase());
       const creditAcc = accounts.find((a) => a.name.trim().toLowerCase() === creditName.toLowerCase());
 
-      let errorText: string | undefined;
-      if (!debitName || !creditName) errorText = 'Missing debit/credit account name';
-      else if (!debitAcc) errorText = `Debit account "${debitName}" not found`;
-      else if (!creditAcc) errorText = `Credit account "${creditName}" not found`;
-      else if (amount <= 0) errorText = 'Amount must be greater than zero';
-      else if (debitAcc.id === creditAcc.id) errorText = 'Debit and Credit account cannot be the same';
+      if (!errorText) {
+        if (!debitAcc) errorText = `Debit account "${debitName}" not found`;
+        else if (!creditAcc) errorText = `Credit account "${creditName}" not found`;
+        else if (amount <= 0) errorText = 'Amount must be greater than zero';
+        else if (debitAcc.id === creditAcc.id) errorText = 'Debit and Credit account cannot be the same';
+      }
 
       rows.push({
         date,
+        dueDate,
+        exchange,
+        segment,
+        voucherType,
+        voucherNo,
+        billNo,
         debitAccountName: debitAcc ? debitAcc.name : debitName || '(missing)',
         creditAccountName: creditAcc ? creditAcc.name : creditName || '(missing)',
         debitAccountId: debitAcc ? debitAcc.id : '',
@@ -387,6 +474,16 @@ export const ExcelImportView: React.FC = () => {
     if (file) {
       processSpreadsheet(file, pref);
     }
+  };
+
+  const handleJournalLedgerAccountChange = (id: string) => {
+    setJournalLedgerAccountId(id);
+    if (file) processSpreadsheet(file, importAction, id, journalContraAccountId);
+  };
+
+  const handleJournalContraAccountChange = (id: string) => {
+    setJournalContraAccountId(id);
+    if (file) processSpreadsheet(file, importAction, journalLedgerAccountId, id);
   };
 
   const handleConfirmImport = async () => {
@@ -437,12 +534,18 @@ export const ExcelImportView: React.FC = () => {
         const items = validRows.map((r) => ({
           financialYear: selectedYear,
           date: r.date,
+          dueDate: r.dueDate,
+          exchange: r.exchange,
+          segment: r.segment,
           debitAccountId: r.debitAccountId,
           debitAccountName: r.debitAccountName,
           creditAccountId: r.creditAccountId,
           creditAccountName: r.creditAccountName,
           amount: r.amount,
           narration: r.narration,
+          voucherType: r.voucherType,
+          voucherNo: r.voucherNo,
+          billNo: r.billNo,
         }));
         const res = await importJournals(items);
         const totalSkipped = journalRows.length - validRows.length + res.skipped;
@@ -542,7 +645,7 @@ export const ExcelImportView: React.FC = () => {
               <span className="text-slate-400 text-[11px]">
                 {importType === 'trades' && 'Maps Stock Name, Action, Exchange, Execution Qty, Price, Brokerage, and Order Types automatically.'}
                 {(importType === 'income' || importType === 'expense') && 'Maps Date, Category, Description/Narration, and Amount columns automatically.'}
-                {importType === 'journal' && 'Maps Date, Debit Account, Credit Account, Amount, and Narration columns automatically.'}
+                {importType === 'journal' && 'Maps Trd Date, Due Date, Exchange, Seg, Voucher Type/No, Bill No, Narration, and either Debit/Credit Account + Amount or Dr Amount/Cr Amount automatically.'}
                 {importType === 'accounts' && 'Maps Account Name, Type/Classification, and Opening Balance columns automatically.'}
               </span>
             </div>
@@ -595,6 +698,48 @@ export const ExcelImportView: React.FC = () => {
               </select>
             )}
           </div>
+
+          {importType === 'journal' && (
+            <div className="mt-4 max-w-xl mx-auto text-left">
+              <p className="text-[11px] text-slate-400 mb-2 flex items-center gap-1.5">
+                <Info size={12} className="shrink-0" />
+                Only needed if your file has <strong className="text-slate-300">Dr Amount / Cr Amount</strong> columns
+                instead of named Debit/Credit Account columns (e.g. a broker Financial Ledger export).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">Ledger Account (this file's statement)</label>
+                  <select
+                    value={journalLedgerAccountId}
+                    onChange={(e) => handleJournalLedgerAccountChange(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="">-- Select Account --</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">Contra Account (balances each voucher)</label>
+                  <select
+                    value={journalContraAccountId}
+                    onChange={(e) => handleJournalContraAccountChange(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="">-- Select Account --</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {file && (
             <p className="mt-3 text-xs text-emerald-400 font-medium">
@@ -763,15 +908,20 @@ export const ExcelImportView: React.FC = () => {
           </div>
 
           <div className="overflow-x-auto max-h-96">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-[11px]">
               <thead className="sticky top-0 bg-slate-950">
                 <tr className="border-b border-slate-800 text-slate-400 font-semibold">
                   <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Trd Date</th>
+                  <th className="py-2.5 px-3">Due Date</th>
+                  <th className="py-2.5 px-3">Exch / Seg</th>
                   <th className="py-2.5 px-3">Debit (Dr)</th>
                   <th className="py-2.5 px-3">Credit (Cr)</th>
                   <th className="py-2.5 px-3 text-right">Amount</th>
-                  <th className="py-2.5 px-3">Narration</th>
+                  <th className="py-2.5 px-3">Voucher Type</th>
+                  <th className="py-2.5 px-3">Voucher No</th>
+                  <th className="py-2.5 px-3">Bill No</th>
+                  <th className="py-2.5 px-3">Narration / Issue</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -791,11 +941,16 @@ export const ExcelImportView: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-400">{r.date}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-400">{r.date}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500">{r.dueDate || '—'}</td>
+                    <td className="py-2.5 px-3 text-slate-400">{[r.exchange, r.segment].filter(Boolean).join(' / ') || '—'}</td>
                     <td className="py-2.5 px-3 font-semibold text-emerald-400">{r.debitAccountName}</td>
                     <td className="py-2.5 px-3 font-semibold text-rose-400">{r.creditAccountName}</td>
                     <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(r.amount)}</td>
-                    <td className="py-2.5 px-3 italic text-slate-400 max-w-xs truncate">{r.errorText || r.narration}</td>
+                    <td className="py-2.5 px-3 text-slate-400">{r.voucherType || '—'}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500">{r.voucherNo || '—'}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500">{r.billNo || '—'}</td>
+                    <td className="py-2.5 px-3 italic text-slate-400 max-w-[180px] truncate">{r.errorText || r.narration}</td>
                   </tr>
                 ))}
               </tbody>
