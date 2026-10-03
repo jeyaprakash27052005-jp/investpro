@@ -33,7 +33,20 @@ export const app = initializeApp(firebaseConfig);
 // lost -- it syncs to Firestore automatically once the connection returns.
 export const db = initializeFirestore(
   app,
-  { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+  {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    // Several optional fields across the app (Journal Entry's Due Date,
+    // Exchange, Seg, Voucher No, Bill No; trade import's HSL Ref No; etc.)
+    // are built as `value || undefined` when a cell/field is left blank.
+    // Firestore's web SDK rejects `undefined` field values by default --
+    // setDoc()/batch.set() throws synchronously with "Unsupported field
+    // value: undefined" -- which was surfacing as "Import failed" and
+    // would equally break a manual Journal Entry save with any of those
+    // fields left blank. This setting makes Firestore silently omit
+    // undefined fields instead of throwing, which is what every call site
+    // already intends.
+    ignoreUndefinedProperties: true,
+  },
   firebaseConfig.firestoreDatabaseId
 );
 export const auth = getAuth(app);
