@@ -95,13 +95,19 @@ export interface JournalRecord {
   id: string;
   userId: string;
   financialYear: string;
-  date: string;
+  date: string; // Trade Date
+  dueDate?: string;
+  exchange?: string; // NSE | BSE | MCX | NSE-MCX
+  segment?: string; // CASH | F&O | CDS | COMM
   debitAccountId: string;
   debitAccountName: string;
   creditAccountId: string;
   creditAccountName: string;
   amount: number;
   narration: string;
+  voucherType?: string; // Journal | Contract Note | Payment | Receipt | Brokerage | DP Charges | AMC | Adjustment | Other
+  voucherNo?: string;
+  billNo?: string;
   createdAt: string;
 }
 

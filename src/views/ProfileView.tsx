@@ -5,7 +5,6 @@ import {
   User as UserIcon,
   Mail,
   Calendar,
-  Image as ImageIcon,
   Save,
   CheckCircle,
   AlertTriangle,
@@ -18,12 +17,10 @@ export const ProfileView: React.FC = () => {
   const { user, userProfile, updateUserProfile } = useApp();
 
   const baselineName = userProfile?.displayName || user?.displayName || '';
-  const baselinePhoto = userProfile?.photoURL || user?.photoURL || '';
   const baselineCompanyName = userProfile?.companyName || '';
   const baselineCompanyAddress = userProfile?.companyAddress || '';
 
   const [displayName, setDisplayName] = useState(baselineName);
-  const [photoURL, setPhotoURL] = useState(baselinePhoto);
   const [companyName, setCompanyName] = useState(baselineCompanyName);
   const [companyAddress, setCompanyAddress] = useState(baselineCompanyAddress);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,15 +30,13 @@ export const ProfileView: React.FC = () => {
   // render (e.g. right after sign-in, before the Firestore listener resolves).
   useEffect(() => {
     setDisplayName(baselineName);
-    setPhotoURL(baselinePhoto);
     setCompanyName(baselineCompanyName);
     setCompanyAddress(baselineCompanyAddress);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baselineName, baselinePhoto, baselineCompanyName, baselineCompanyAddress]);
+  }, [baselineName, baselineCompanyName, baselineCompanyAddress]);
 
   const isDirty =
     displayName.trim() !== baselineName ||
-    photoURL.trim() !== baselinePhoto ||
     companyName.trim() !== baselineCompanyName ||
     companyAddress.trim() !== baselineCompanyAddress;
 
@@ -55,7 +50,6 @@ export const ProfileView: React.FC = () => {
     setStatus(null);
     const ok = await updateUserProfile({
       displayName: displayName.trim(),
-      photoURL: photoURL.trim(),
       companyName: companyName.trim(),
       companyAddress: companyAddress.trim(),
     });
@@ -67,7 +61,7 @@ export const ProfileView: React.FC = () => {
     );
   };
 
-  const previewSrc = photoURL.trim();
+  const previewSrc = user?.photoURL || '';
   const initial = (displayName || user?.email || 'U').trim()[0]?.toUpperCase() || 'U';
 
   return (
@@ -102,17 +96,7 @@ export const ProfileView: React.FC = () => {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 mb-1.5">
-                <ImageIcon size={12} /> Photo URL (optional)
-              </label>
-              <input
-                type="url"
-                value={photoURL}
-                onChange={(e) => setPhotoURL(e.target.value)}
-                placeholder="https://example.com/your-photo.jpg"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">Leave blank to use your Google account photo.</p>
+              <p className="text-xs text-slate-400">Your profile photo is taken from your Google account.</p>
             </div>
           </div>
 
@@ -179,7 +163,6 @@ export const ProfileView: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setDisplayName(baselineName);
-                  setPhotoURL(baselinePhoto);
                   setCompanyName(baselineCompanyName);
                   setCompanyAddress(baselineCompanyAddress);
                   setStatus(null);
